@@ -1,0 +1,54 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+
+jobs:
+  publish:
+    name: Build & publish Docker images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine image tag
+        id: meta
+        run: echo "tag=$(echo ${GITHUB_SHA} | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
+      - name: Build & push backend image
+        run: |
+          docker build -t ghcr.io/${{ github.repository }}/backend:latest -f backend/Dockerfile ./backend || true
+          docker build -t ghcr.io/${{ github.repository }}/backend:${{ steps.meta.outputs.tag }} -f backend/Dockerfile ./backend || true
+          docker push ghcr.io/${{ github.repository }}/backend:latest || true
+          docker push ghcr.io/${{ github.repository }}/backend:${{ steps.meta.outputs.tag }} || true
+
+      - name: Build & push frontend image
+        run: |
+          docker build -t ghcr.io/${{ github.repository }}/frontend:latest -f frontend/Dockerfile ./frontend || true
+          docker build -t ghcr.io/${{ github.repository }}/frontend:${{ steps.meta.outputs.tag }} -f frontend/Dockerfile ./frontend || true
+          docker push ghcr.io/${{ github.repository }}/frontend:latest || true
+          docker push ghcr.io/${{ github.repository }}/frontend:${{ steps.meta.outputs.tag }} || true
+
+  deploy:
+    name: Deploy (placeholder for hosting target)
+    runs-on: ubuntu-latest
+    needs: publish
+    steps:
+      - name: Deploy notice
+        run: |
+          echo "Images published to GHCR."
+          echo "Next step in a real deployment: trigger a pull + restart on the"
+          echo "target host (e.g. via SSH, a Render/Fly.io deploy hook, or a"
+          echo "Kubernetes rollout restart referencing the new image tag)."
